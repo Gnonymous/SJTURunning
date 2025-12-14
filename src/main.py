@@ -73,6 +73,8 @@ def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb
         
         # 从配置文件读取参数
         app_config = load_config()
+        use_specific_dates = app_config.get("指定日期模式", False)
+        specific_dates = app_config.get("指定日期列表", [])
         total_runs = app_config.get("跑步天数", 25)
         use_random_time = app_config.get("跑步时间随机", False)
         fixed_hour = app_config.get("固定跑步时间_时", 8)
@@ -86,18 +88,37 @@ def run_sports_upload(config, progress_callback=None, log_cb=None, stop_check_cb
         # 计算日期列表
         now = datetime.datetime.now()
         start_times = []
-        for i in range(total_runs):
-            day = now - datetime.timedelta(days=i+1)  # 从昨天开始
-            if use_random_time:
-                # 随机生成时间
-                rand_hour = random.randint(random_start_hour, random_end_hour)
-                rand_minute = random.randint(0, 59)
-                rand_second = random.randint(0, 59)
-                start_dt = day.replace(hour=rand_hour, minute=rand_minute, second=rand_second, microsecond=0)
-            else:
-                # 使用固定时间
-                start_dt = day.replace(hour=fixed_hour, minute=fixed_minute, second=0, microsecond=0)
-            start_times.append(start_dt)
+        
+        if use_specific_dates and specific_dates:
+            # 指定日期模式：解析指定的日期列表
+            log_output(f"使用指定日期模式，共 {len(specific_dates)} 个日期", callback=log_cb)
+            for date_str in specific_dates:
+                try:
+                    # 解析日期字符串 (格式: YYYY-MM-DD)
+                    day = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                    if use_random_time:
+                        rand_hour = random.randint(random_start_hour, random_end_hour)
+                        rand_minute = random.randint(0, 59)
+                        rand_second = random.randint(0, 59)
+                        start_dt = day.replace(hour=rand_hour, minute=rand_minute, second=rand_second, microsecond=0)
+                    else:
+                        start_dt = day.replace(hour=fixed_hour, minute=fixed_minute, second=0, microsecond=0)
+                    start_times.append(start_dt)
+                except ValueError as e:
+                    log_output(f"日期格式错误: {date_str}，跳过。正确格式: YYYY-MM-DD", "warning", log_cb)
+            total_runs = len(start_times)
+        else:
+            # 天数模式：从昨天开始往前推
+            for i in range(total_runs):
+                day = now - datetime.timedelta(days=i+1)
+                if use_random_time:
+                    rand_hour = random.randint(random_start_hour, random_end_hour)
+                    rand_minute = random.randint(0, 59)
+                    rand_second = random.randint(0, 59)
+                    start_dt = day.replace(hour=rand_hour, minute=rand_minute, second=rand_second, microsecond=0)
+                else:
+                    start_dt = day.replace(hour=fixed_hour, minute=fixed_minute, second=0, microsecond=0)
+                start_times.append(start_dt)
 
         for idx, start_dt in enumerate(start_times, start=1):
             if stop_check_cb and stop_check_cb():
