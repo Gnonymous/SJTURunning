@@ -1,5 +1,7 @@
 configs/*
 
+AGENT.md
+
 **/__pycache__/
 
 build/

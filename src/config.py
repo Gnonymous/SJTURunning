@@ -1,7 +1,7 @@
 import json
 import os
 
-global_version = "2.0.0"
+global_version = "2.1.0"
 
 def get_config_path():
     """获取 config.json 的路径"""
