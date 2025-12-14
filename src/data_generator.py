@@ -155,8 +155,24 @@ def generate_running_data_payload(config, required_signpoints, point_rules_data,
     """
     # 从配置文件读取参数
     app_config = load_config()
-    target_distance_m = app_config.get("每日距离_米", 5000)
-    pace_min_per_km = app_config.get("配速_分钟每公里", 3.5)
+    
+    # 判断是否使用随机参数
+    use_random_params = app_config.get("参数随机", False)
+    
+    if use_random_params:
+        # 随机距离
+        dist_min = app_config.get("距离最小_米", 4000)
+        dist_max = app_config.get("距离最大_米", 6000)
+        target_distance_m = random.randint(dist_min, dist_max)
+        
+        # 随机配速
+        pace_min = app_config.get("配速最小_分钟每公里", 3.5)
+        pace_max = app_config.get("配速最大_分钟每公里", 5.0)
+        pace_min_per_km = round(random.uniform(pace_min, pace_max), 1)
+    else:
+        target_distance_m = app_config.get("每日距离_米", 5000)
+        pace_min_per_km = app_config.get("配速_分钟每公里", 3.5)
+    
     pace_sec_per_km = pace_min_per_km * 60  # 转为秒/公里
     total_duration_sec = int(round(pace_sec_per_km * (target_distance_m / 1000.0)))
 
