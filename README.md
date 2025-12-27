@@ -22,23 +22,32 @@
 
 ## 🚀 快速开始
 
-### 1️⃣ 安装依赖
+### 方式一：直接下载（推荐）
+
+前往 [**Releases 页面**](https://github.com/Gnonymous/SJTURunning/releases/latest) 下载适合您系统的版本：
+
+| 平台 | 下载文件 |
+|------|----------|
+| Windows | `SJTURunning-windows-vX.X.X.zip` |
+| macOS | `SJTURunning-macos-vX.X.X.zip` |
+
+解压后双击运行 `SJTURunning` 即可使用，无需安装 Python 环境。
+
+### 方式二：从源码运行
 
 ```bash
+# 安装依赖
 pip install PySide6 requests tenacity
-```
 
-### 2️⃣ 启动程序
-
-```bash
+# 启动程序
 python qtui.py
 ```
 
-### 3️⃣ 使用流程
+### 使用流程
 
 1. **输入账号密码** — 填写 Jaccount 用户名和密码
 2. **配置参数** — 设置日期、距离、配速等参数（**配置自动保存**）
-3. **开始上传** — 点击"一键跑步"，等待完成
+3. **开始上传** — 点击"一键跑步"，确认配置后等待完成
 
 > 💡 **提示**: 账号密码仅用于登录，不会保存到配置文件
 

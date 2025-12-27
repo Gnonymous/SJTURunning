@@ -43,7 +43,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='SJTURunningMan',
+    name='SJTURunning',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

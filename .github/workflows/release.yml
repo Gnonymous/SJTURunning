@@ -36,23 +36,23 @@ jobs:
       - name: Build with PyInstaller (Windows)
         if: runner.os == 'Windows'
         run: |
-          pyinstaller --onefile --windowed --name SJTURunningMan --icon=assets/SJTURM.png --add-data "assets;assets" qtui.py
+          pyinstaller --onefile --windowed --name SJTURunning --icon=assets/SJTURM.png --add-data "assets;assets" qtui.py
       
       - name: Build with PyInstaller (macOS)
         if: runner.os == 'macOS'
         run: |
-          pyinstaller --onefile --windowed --name SJTURunningMan --icon=assets/SJTURM.png --add-data "assets:assets" qtui.py
+          pyinstaller --onefile --windowed --name SJTURunning --icon=assets/SJTURM.png --add-data "assets:assets" qtui.py
       
       - name: Create zip archive (Windows)
         if: runner.os == 'Windows'
         run: |
-          Compress-Archive -Path dist/SJTURunningMan.exe -DestinationPath ${{ matrix.artifact_name }}-${{ github.ref_name }}.zip
+          Compress-Archive -Path dist/SJTURunning.exe -DestinationPath ${{ matrix.artifact_name }}-${{ github.ref_name }}.zip
         shell: pwsh
       
       - name: Create zip archive (macOS)
         if: runner.os == 'macOS'
         run: |
-          cd dist && zip -r ../${{ matrix.artifact_name }}-${{ github.ref_name }}.zip SJTURunningMan
+          cd dist && zip -r ../${{ matrix.artifact_name }}-${{ github.ref_name }}.zip SJTURunning.app
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -90,7 +90,7 @@ jobs:
             
             ### 📖 使用说明
             1. 下载对应平台的压缩包
-            2. 解压后运行 SJTURunningMan
+            2. 解压后运行 SJTURunning
             3. 填写 Jaccount 用户名和密码
             4. 配置跑步参数后点击"一键跑步"
           files: |
