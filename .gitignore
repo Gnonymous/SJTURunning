@@ -8,3 +8,4 @@ build/
 dist/
 
 SJTU Sports Uploader.spec
+.DS_Store
