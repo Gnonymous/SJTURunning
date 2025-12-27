@@ -170,6 +170,16 @@ SJTURunning/
 
 ---
 
+## 🤝 鸣谢
+
+感谢历代交大开发者的贡献：
+
+- **原作者**：[Labyrinth0419](https://github.com/Labyrinth0419)
+- **二改优化**：[accelerator-s](https://github.com/accelerator-s)
+- **三改维护**：[Gnonymous (me)](https://github.com/Gnonymous)（更多自定义选项及多平台支持）
+
+---
+
 ## 📜 免责声明
 
 本工具仅供学习与研究使用，请遵守学校相关规定。使用本工具产生的一切后果由使用者自行承担。
