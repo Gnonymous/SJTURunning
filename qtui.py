@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QScrollArea, QSizePolicy, QCheckBox, QSpinBox, QDoubleSpinBox,
     QSpacerItem, QRadioButton, QButtonGroup, QFrame
 )
-from PySide6.QtCore import QThread, Signal, QDateTime, Qt, QUrl, QEvent
+from PySide6.QtCore import QThread, Signal, QDateTime, Qt, QUrl, QEvent, QTimer
 from PySide6.QtGui import QTextCursor, QFont, QColor, QTextCharFormat, QPalette, QBrush, QIcon, QDesktopServices
 
 from src.main import run_sports_upload
@@ -72,16 +72,34 @@ class SportsUploaderUI(QWidget):
         self.setWindowTitle("SJTU 校园轻松跑 - Version " + config.global_version)
         self.setWindowIcon(QIcon(os.path.join(RESOURCES_FULL_PATH, "SJTURM.png")))
 
-        # 后台线程引用（私有）
+        # 存储对外部工作线程的引用
         self._thread = None
         # 关于窗口引用，防止被垃圾回收
         self._help_window = None
 
-        self.config = {}
+        # 加载配置（供 get_settings_from_ui 使用原始 config 引用）
+        self.config = load_config()
+
+        # 自动保存防抖定时器（500ms 延迟）
+        self._auto_save_timer = QTimer(self)
+        self._auto_save_timer.setSingleShot(True)
+        self._auto_save_timer.setInterval(500)
+        self._auto_save_timer.timeout.connect(self._auto_save_config)
 
         self.setup_ui_style()
         self.init_ui()
 
+        # 设置最小和最大窗口大小供用户调节
+        # 最小：确保基本元素可用（如 320 宽）
+        # 最大：限制为主显示器可用区域宽度，以避免内容拉伸过多
+        try:
+            screen = QApplication.primaryScreen()
+            if screen is None:
+                available_width = 600
+            else:
+                available_width = screen.availableGeometry().width()
+        except Exception:
+            available_width = 600
         self.setGeometry(300, 100, 500, 650)
         self.setMinimumSize(450, 550)
 
@@ -246,18 +264,6 @@ class SportsUploaderUI(QWidget):
             #stopButton:pressed {
                 background-color: rgb(140, 34, 44);
             }
-            #saveButton {
-                background-color: rgb(74, 144, 226);
-                color: white;
-                border: 1px solid rgb(74, 144, 226);
-            }
-            #saveButton:hover {
-                background-color: rgb(52, 120, 198);
-                border: 1px solid rgb(52, 120, 198);
-            }
-            #saveButton:pressed {
-                background-color: rgb(40, 100, 180);
-            }
             QLabel#getCookieLink {
                 color: rgb(74, 144, 226);
                 text-decoration: underline;
@@ -338,6 +344,7 @@ class SportsUploaderUI(QWidget):
         self.days_spin.setRange(1, 100)
         self.days_spin.setValue(app_config.get("跑步天数", 25))
         self.days_spin.setFixedWidth(100)
+        self.days_spin.valueChanged.connect(self._schedule_auto_save)
         days_hint = QLabel("天 (从昨天开始)")
         days_hint.setStyleSheet("color: #888;")
         days_inner_layout.addWidget(days_label)
@@ -356,6 +363,7 @@ class SportsUploaderUI(QWidget):
         self.dates_input.setPlaceholderText("例如: 2025-12-13, 2025-12-10")
         dates_list = app_config.get("指定日期列表", [])
         self.dates_input.setText(", ".join(dates_list) if dates_list else "")
+        self.dates_input.textChanged.connect(self._schedule_auto_save)
         dates_inner_layout.addWidget(dates_label)
         dates_inner_layout.addWidget(self.dates_input)
         run_layout.addWidget(self.dates_widget)
@@ -370,8 +378,9 @@ class SportsUploaderUI(QWidget):
             self.days_widget.show()
             self.dates_widget.hide()
         
-        # 连接模式切换信号
+        # 连接模式切换信号（同时触发自动保存）
         self.mode_days_radio.toggled.connect(self.on_mode_changed)
+        self.mode_days_radio.toggled.connect(self._schedule_auto_save)
 
         # 分隔线
         line1 = QFrame()
@@ -388,6 +397,7 @@ class SportsUploaderUI(QWidget):
         self.random_params_check = QCheckBox("使用随机参数（更真实）")
         self.random_params_check.setChecked(app_config.get("参数随机", False))
         self.random_params_check.toggled.connect(self.on_params_mode_changed)
+        self.random_params_check.toggled.connect(self._schedule_auto_save)
         run_layout.addWidget(self.random_params_check)
 
         # 固定参数容器
@@ -402,6 +412,7 @@ class SportsUploaderUI(QWidget):
         self.dist_spin.setSingleStep(500)
         self.dist_spin.setValue(app_config.get("每日距离_米", 5000))
         self.dist_spin.setFixedWidth(100)
+        self.dist_spin.valueChanged.connect(self._schedule_auto_save)
         self.dist_spin.setSuffix(" 米")
         
         pace_label = QLabel("配速:")
@@ -410,6 +421,7 @@ class SportsUploaderUI(QWidget):
         self.pace_spin.setSingleStep(0.5)
         self.pace_spin.setValue(app_config.get("配速_分钟每公里", 3.5))
         self.pace_spin.setFixedWidth(100)
+        self.pace_spin.valueChanged.connect(self._schedule_auto_save)
         self.pace_spin.setSuffix(" 分/km")
         
         fixed_params_layout.addWidget(dist_label)
@@ -435,6 +447,7 @@ class SportsUploaderUI(QWidget):
         self.dist_min_spin.setValue(app_config.get("距离最小_米", 4000))
         self.dist_min_spin.setFixedWidth(90)
         self.dist_min_spin.setSuffix(" 米")
+        self.dist_min_spin.valueChanged.connect(self._schedule_auto_save)
         dist_to = QLabel("~")
         self.dist_max_spin = QSpinBox()
         self.dist_max_spin.setRange(1000, 20000)
@@ -442,6 +455,7 @@ class SportsUploaderUI(QWidget):
         self.dist_max_spin.setValue(app_config.get("距离最大_米", 6000))
         self.dist_max_spin.setFixedWidth(90)
         self.dist_max_spin.setSuffix(" 米")
+        self.dist_max_spin.valueChanged.connect(self._schedule_auto_save)
         dist_range_layout.addWidget(dist_range_label)
         dist_range_layout.addWidget(self.dist_min_spin)
         dist_range_layout.addWidget(dist_to)
@@ -458,6 +472,7 @@ class SportsUploaderUI(QWidget):
         self.pace_min_spin.setValue(app_config.get("配速最小_分钟每公里", 3.5))
         self.pace_min_spin.setFixedWidth(90)
         self.pace_min_spin.setSuffix(" 分")
+        self.pace_min_spin.valueChanged.connect(self._schedule_auto_save)
         pace_to = QLabel("~")
         self.pace_max_spin = QDoubleSpinBox()
         self.pace_max_spin.setRange(3.0, 9.0)
@@ -465,6 +480,7 @@ class SportsUploaderUI(QWidget):
         self.pace_max_spin.setValue(app_config.get("配速最大_分钟每公里", 5.0))
         self.pace_max_spin.setFixedWidth(90)
         self.pace_max_spin.setSuffix(" 分")
+        self.pace_max_spin.valueChanged.connect(self._schedule_auto_save)
         pace_range_layout.addWidget(pace_range_label)
         pace_range_layout.addWidget(self.pace_min_spin)
         pace_range_layout.addWidget(pace_to)
@@ -492,6 +508,7 @@ class SportsUploaderUI(QWidget):
         self.random_time_check = QCheckBox("使用随机时间（更真实）")
         self.random_time_check.setChecked(app_config.get("跑步时间随机", False))
         self.random_time_check.toggled.connect(self.on_time_mode_changed)
+        self.random_time_check.toggled.connect(self._schedule_auto_save)
         run_layout.addWidget(self.random_time_check)
 
         # 固定时间容器
@@ -503,10 +520,12 @@ class SportsUploaderUI(QWidget):
         self.fixed_hour_spin.setRange(0, 23)
         self.fixed_hour_spin.setValue(app_config.get("固定跑步时间_时", 8))
         self.fixed_hour_spin.setFixedWidth(60)
+        self.fixed_hour_spin.valueChanged.connect(self._schedule_auto_save)
         hour_label = QLabel(":")
         self.fixed_min_spin = QSpinBox()
         self.fixed_min_spin.setRange(0, 59)
         self.fixed_min_spin.setValue(app_config.get("固定跑步时间_分", 0))
+        self.fixed_min_spin.valueChanged.connect(self._schedule_auto_save)
         self.fixed_min_spin.setFixedWidth(60)
         fixed_time_layout.addWidget(fixed_label)
         fixed_time_layout.addWidget(self.fixed_hour_spin)
@@ -524,11 +543,13 @@ class SportsUploaderUI(QWidget):
         self.rand_start_spin.setRange(0, 23)
         self.rand_start_spin.setValue(app_config.get("随机时间范围_开始时", 7))
         self.rand_start_spin.setFixedWidth(60)
+        self.rand_start_spin.valueChanged.connect(self._schedule_auto_save)
         to_label = QLabel("~")
         self.rand_end_spin = QSpinBox()
         self.rand_end_spin.setRange(0, 23)
         self.rand_end_spin.setValue(app_config.get("随机时间范围_结束时", 20))
         self.rand_end_spin.setFixedWidth(60)
+        self.rand_end_spin.valueChanged.connect(self._schedule_auto_save)
         end_label = QLabel("时")
         random_time_layout.addWidget(random_label)
         random_time_layout.addWidget(self.rand_start_spin)
@@ -541,9 +562,9 @@ class SportsUploaderUI(QWidget):
         # 初始化时间模式显示
         self.on_time_mode_changed(self.random_time_check.isChecked())
 
-        # 红色提示文字
-        hint_label = QLabel("⚠️ 修改配置后，请点击「保存配置」按钮生效")
-        hint_label.setStyleSheet("color: #DC3545; font-size: 12px; padding: 8px 0;")
+        # 自动保存提示文字（绿色，表示配置会自动保存）
+        hint_label = QLabel("✅ 配置修改后将自动保存")
+        hint_label.setStyleSheet("color: #4CAF50; font-size: 12px; padding: 8px 0;")
         run_layout.addWidget(hint_label)
 
         run_group.setLayout(run_layout)
@@ -562,11 +583,6 @@ class SportsUploaderUI(QWidget):
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self.stop_upload)
         action_button_layout.addWidget(self.stop_button)
-
-        self.save_config_button = QPushButton("保存配置")
-        self.save_config_button.setObjectName("saveButton")
-        self.save_config_button.clicked.connect(self.save_config_to_file)
-        action_button_layout.addWidget(self.save_config_button)
 
         self.info_button = QPushButton("关于")
         self.info_button.clicked.connect(self.show_info_dialog)
@@ -650,8 +666,12 @@ class SportsUploaderUI(QWidget):
         except Exception:
             return
 
-    def save_config_to_file(self):
-        """将 UI 中的配置保存到 config.json"""
+    def _schedule_auto_save(self):
+        """触发自动保存（带防抖）"""
+        self._auto_save_timer.start()
+
+    def _auto_save_config(self):
+        """静默自动保存配置到 config.json（不弹出提示框）"""
         import json
         from src.config import get_config_path
         
@@ -690,11 +710,10 @@ class SportsUploaderUI(QWidget):
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(new_config, f, ensure_ascii=False, indent=4)
             
-            self.log_output_text("配置已保存到 config.json", "success")
-            QMessageBox.information(self, "保存成功", "配置已保存！")
+            # 静默保存成功，不弹出提示框
         except Exception as e:
-            self.log_output_text(f"保存配置失败: {e}", "error")
-            QMessageBox.warning(self, "保存失败", f"保存配置失败: {e}")
+            # 自动保存失败时在日志中显示错误（不打扰用户）
+            self.log_output_text(f"自动保存配置失败: {e}", "error")
 
     def get_settings_from_ui(self):
         """从UI获取当前配置并返回字典"""
@@ -731,6 +750,55 @@ class SportsUploaderUI(QWidget):
             raise Exception(f"获取配置时发生未知错误: {e}")
 
     def start_upload(self):
+        # 先确保配置已保存
+        self._auto_save_config()
+        
+        # 构建配置摘要供用户确认
+        if self.mode_dates_radio.isChecked():
+            date_info = f"指定日期: {self.dates_input.text().strip() or '(未填写)'}"
+        else:
+            date_info = f"往前推 {self.days_spin.value()} 天"
+        
+        if self.random_params_check.isChecked():
+            params_info = f"距离: {self.dist_min_spin.value()}~{self.dist_max_spin.value()} 米\n配速: {self.pace_min_spin.value()}~{self.pace_max_spin.value()} 分/km"
+        else:
+            params_info = f"距离: {self.dist_spin.value()} 米\n配速: {self.pace_spin.value()} 分/km"
+        
+        if self.random_time_check.isChecked():
+            time_info = f"随机时间: {self.rand_start_spin.value()}:00 ~ {self.rand_end_spin.value()}:00"
+        else:
+            time_info = f"固定时间: {self.fixed_hour_spin.value():02d}:{self.fixed_min_spin.value():02d}"
+        
+        # 获取用户名
+        username = self.username_input.text().strip() or "(未填写)"
+        
+        confirm_msg = f"""请确认以下配置：
+
+👤 用户
+{username}
+
+📅 日期设置
+{date_info}
+
+🏃 跑步参数 {'(随机)' if self.random_params_check.isChecked() else '(固定)'}
+{params_info}
+
+⏰ 时间设置 {'(随机)' if self.random_time_check.isChecked() else '(固定)'}
+{time_info}
+
+是否开始上传？"""
+        
+        reply = QMessageBox.question(
+            self, 
+            "确认配置", 
+            confirm_msg,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
         self.log_output_area.clear()
         self.progress_bar.setValue(0)
         self.status_label.setText("状态: 准备中...")
