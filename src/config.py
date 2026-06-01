@@ -3,7 +3,7 @@ import os
 import shutil
 import sys
 
-global_version = "2.1.0"
+global_version = "2.1.1"
 
 APP_NAME = "SJTURunning"
 
