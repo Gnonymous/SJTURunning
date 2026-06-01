@@ -1,6 +1,7 @@
 from time import sleep
 import requests
 import os, sys
+import tempfile
 
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
@@ -53,26 +54,32 @@ def _get_login_page(session, url):
 def _get_captcha(session, captcha_url):
     session.get(captcha_url)
     captcha_jpeg = session.get(captcha_url)
-    image_path = "captcha.jpeg"
+    image_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpeg")
+    image_path = image_file.name
+    image_file.close()
     with open(image_path, "wb") as f:
         f.write(captcha_jpeg.content)
+    return image_path
 
 
 # 调用外部模型识别验证码
-def _indentify_captcha():
+def _indentify_captcha(image_path):
     captcha_solver_url = "https://geek.sjtu.edu.cn/captcha-solver/"
-    image_path = "captcha.jpeg"
-
-    with open(image_path, "rb") as f:
-        files = {"image": ("captcha.jpg", f, "image/jpeg")}
-        response = requests.post(captcha_solver_url, files=files)
 
     try:
+        with open(image_path, "rb") as f:
+            files = {"image": ("captcha.jpg", f, "image/jpeg")}
+            response = requests.post(captcha_solver_url, files=files)
+
         result = response.json().get("result")
-        os.remove("captcha.jpeg")
+        if not result:
+            raise RuntimeError("验证码识别失败")
         return result
-    except Exception:
-        print("验证码识别失败！")
+    finally:
+        try:
+            os.remove(image_path)
+        except FileNotFoundError:
+            pass
 
 @retry(retry=retry_if_exception_type(RequestException), wait=wait_fixed(3))
 def _post_login_request(session, login_page, username, password, captcha_code):
@@ -116,8 +123,8 @@ def login(username, password):
         captcha_url = 'https://jaccount.sjtu.edu.cn/jaccount/captcha?' + captcha_id
 
         # 下载验证码图片
-        _get_captcha(session, captcha_url)
-        captcha_code = _indentify_captcha()
+        image_path = _get_captcha(session, captcha_url)
+        captcha_code = _indentify_captcha(image_path)
 
         # 获取用户名和密码
         sleep(1)
